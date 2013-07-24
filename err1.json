@@ -1,0 +1,9 @@
+[
+    {"name": "ErrStruct",
+     "fields": [
+        {"name": "bits", "offset": 0, "type": "bitfield.uint8", "bit_fields": [
+            {"name": "flag1"},
+            {"name": "too_bit", "size": 8}
+        ]}
+     ]}
+]
