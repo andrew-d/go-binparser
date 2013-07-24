@@ -8,8 +8,6 @@ import sys
 import json
 from collections import namedtuple
 
-from bitvector import BitVector
-
 
 def set_bits(num):
     val = 0
