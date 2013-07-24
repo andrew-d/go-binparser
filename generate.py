@@ -1,4 +1,61 @@
 #!/usr/bin/env python
+"""
+The general purpose of this program is to take a structured representation of
+a data structure (pun not intended), and output code for a specific language to
+parse this data structure.  Currently, Google Go is the main language target.
+
+- A structure consists of a name, and some number of fields.  Optional
+  attributes include: endianness (defaults to little-endian), ...
+- A field consists of a name, an offset in the parent structure, and then a
+  storage specifier that determines what to read.  Valid storage specifiers
+  are the integral types:
+      - [u]int[8|16|32|64]
+      - uintptr (pointer-sized type, differs between endian-ness)
+
+  And the helpful extensions:
+      - bitfield (which then consists of other sub-fields)
+      - arrays of integral types
+
+  A field can also specify the endianness manually.  If not overridden, it will
+  default to that of the parent structure.
+
+Note that this project is NOT designed to be a general-purpose binary parsing
+library, a la Python's Construct.  Since I plan on adding other language
+targets in the future, this library is designed to be the lowest common
+denominator of binary parsing - taking a single structure and its associated
+fields, and reading them into an in-memory representation in the host language.
+
+Examples, in YAML format:
+
+---
+name: Test1
+fields:
+    - name: foo
+      offset: 0
+      type: uint8
+    - name: bar
+      offset: 1
+      type: int16
+    - name: bits
+      offset: 3
+      type: bitfield.uint8      # Anything after the '.' is taken to be a
+                                # storage specifier, and the generator will
+                                # validate that no more than the specified
+                                # number of bits will be used.  Note that
+                                # signed/unsigned doesn't matter here, except
+                                # that we might include an option to read the
+                                # whole value of the bitfield.
+      fields:
+          - name: flag1         # Default: 1 bit
+          - name: not_a_flag    # Override number of bits
+            size: 2
+"""
+
+# TODO list (in order):
+#   - Add uintptr
+#   - Standardize on direction for bitfield (start from left/right?)
+#   - Fix endianness
+#   - Check on arrays of bitvectors
 
 from __future__ import print_function
 
@@ -59,60 +116,6 @@ BitField = namedtuple('BitField', [
     'name',
     'size',
 ])
-
-
-"""
-The general meaning of this program is to take a structured representation of
-a data structure (pun not intended), and output code for a specific language to
-parse this data structure.  Currently, Google Go is the main language target.
-
-- A structure consists of a name, and some number of fields.  Optional
-  attributes include: endianness (defaults to little-endian), ...
-- A field consists of a name, an offset in the parent structure, and then a
-  storage specifier that determines what to read.  Valid storage specifiers
-  are the integral types:
-      - [u]int[8|16|32|64]
-      - uintptr (pointer-sized type, differs between endian-ness)
-
-  And the helpful extensions:
-      - bitfield (which then consists of other sub-fields)
-      - arrays of integral types
-
-  A field can also specify the endianness manually.  If not overridden, it will
-  default to that of the parent structure.
-
-Note that this project is NOT designed to be a general-purpose binary parsing
-library, a la Python's Construct.  Since I plan on adding other language
-targets in the future, this library is designed to be the lowest common
-denominator of binary parsing - taking a single structure and its associated
-fields, and reading them into an in-memory representation in the host language.
-
-Examples, in YAML format:
-
----
-name: Test1
-fields:
-    - name: foo
-      offset: 0
-      type: uint8
-    - name: bar
-      offset: 1
-      type: int16
-    - name: bits
-      offset: 3
-      type: bitfield.uint8      # Anything after the '.' is taken to be a
-                                # storage specifier, and the generator will
-                                # validate that no more than the specified
-                                # number of bits will be used.  Note that
-                                # signed/unsigned doesn't matter here, except
-                                # that we might include an option to read the
-                                # whole value of the bitfield.
-      fields:
-          - name: flag1         # Default: 1 bit
-          - name: not_a_flag    # Override number of bits
-            size: 2
-
-"""
 
 
 class Generator(object):
