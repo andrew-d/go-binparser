@@ -164,6 +164,7 @@ class Generator(object):
 
     def add_one(self, struct):
         s_name = struct['name']
+        output_name = s_name[0].capitalize() + s_name[1:]
 
         # Collect a tuple of each field's data, with certain defaults.
         fields = []
@@ -220,7 +221,7 @@ class Generator(object):
         # Create the structure definition in the order it's given (i.e. do it
         # before sorting).
         defn = [
-            'type %s struct {' % (s_name.title(),)
+            'type %s struct {' % (output_name,)
         ]
         for field in fields:
             # Depending on the type...
@@ -260,7 +261,7 @@ class Generator(object):
             return tmp
 
         code = [
-            'var output %s' % (s_name.title(),),
+            'var output %s' % (output_name,),
             'var err error',
             '',
         ]
@@ -346,7 +347,7 @@ class Generator(object):
 
         # Write the code (indented and everything!)
         self.defs.append('func Parse%s(input io.Reader) (*%s, error) {' % (
-            s_name.title(), s_name.title()
+            output_name, output_name
         ))
         self.defs.extend('\t' + x for x in code)
         self.defs.append('}')
