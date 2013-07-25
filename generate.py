@@ -88,8 +88,23 @@ def test_set_bits():
     assert set_bits(64) == 0xFFFFFFFFFFFFFFFF
 
 
-_ARRAY_RE = re.compile(r'(.*?)\[(\d)+\]')
+_NAME_RE = re.compile(r'^(u)?int(8|16|32)$')
 
+def validate_integral_type(name):
+    return (name == 'uintptr' or
+            _NAME_RE.match(name) is not None)
+
+
+def test_validate_integral_type():
+    assert validate_integral_type('uint8') == True
+    assert validate_integral_type('uint88') == False
+    assert validate_integral_type('int16') == True
+    assert validate_integral_type('uint32') == True
+    assert validate_integral_type('uintptr') == True
+    assert validate_integral_type('intptr') == False
+
+
+_ARRAY_RE = re.compile(r'(.*?)\[(\d)+\]')
 
 SIZES = {
     'int8': 1,
@@ -187,6 +202,17 @@ class Generator(object):
                 sub_type, array_num = match.groups()
                 array_num = int(array_num)
                 type = 'array'
+
+            # Validate the name.
+            if type in ['array', 'bitfield']:
+                check = sub_type
+            else:
+                check = type
+
+            valid = validate_integral_type(check)
+            if not valid:
+                raise Exception('Invalid type given for field "%s": %s' % (
+                    name, check))
 
             fields.append(Field(name, offset, type, sub_type, bit_fields,
                                 array_num))
