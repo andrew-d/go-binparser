@@ -52,7 +52,6 @@ fields:
 """
 
 # TODO list (in order):
-#   - Add uintptr
 #   - Standardize on direction for bitfield (start from left/right?)
 #   - Fix endianness
 #   - Check on arrays of bitvectors
@@ -88,7 +87,7 @@ def test_set_bits():
     assert set_bits(64) == 0xFFFFFFFFFFFFFFFF
 
 
-_NAME_RE = re.compile(r'^(u)?int(8|16|32)$')
+_NAME_RE = re.compile(r'^(u)?int(8|16|32|64)$')
 
 def validate_integral_type(name):
     return (name == 'uintptr' or
