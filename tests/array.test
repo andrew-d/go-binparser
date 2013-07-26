@@ -1,0 +1,6 @@
+[
+    {"name": "ArrayTest",
+     "fields": [
+        {"name": "arr", "offset": 0, "type": "uint16[3]"}
+    ]}
+]
