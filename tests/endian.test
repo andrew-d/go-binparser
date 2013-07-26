@@ -1,0 +1,8 @@
+[
+    {"name": "UintTest", "endian": "big",
+     "fields": [
+        {"name": "default", "offset": 0, "type": "uint32"},
+        {"name": "override_big", "offset": 4, "type": "uint32", "endian": "big"},
+        {"name": "override_little", "offset": 8, "type": "uint32", "endian": "little"}
+    ]}
+]

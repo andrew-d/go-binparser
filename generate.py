@@ -56,7 +56,6 @@ fields:
 
 # TODO list (in order):
 #   - Standardize on direction for bitfield (start from left/right?)
-#   - Fix endianness
 #   - Check on arrays of bitvectors
 
 from __future__ import print_function
@@ -129,6 +128,7 @@ Field = namedtuple('Field', [
     'sub_type',
     'bit_fields',
     'array_num',
+    'endian',
 ])
 
 
@@ -151,6 +151,7 @@ class Parser(object):
 
     def add_one(self, struct):
         s_name = struct['name']
+        def_endian = struct.get('endian', 'little')
 
         # Collect each field's data, with certain defaults.
         fields = []
@@ -162,6 +163,7 @@ class Parser(object):
             sub_type   = None
             bit_fields = None
             array_num  = None
+            endian     = field.get('endian', def_endian)
 
             # If the type is 'bitfield', we need the bit type and bit fields.
             if ty.startswith('bitfield'):
@@ -182,7 +184,8 @@ class Parser(object):
                 ty = 'array'
 
             # Create our field.
-            field = Field(name, offset, ty, sub_type, bit_fields, array_num)
+            field = Field(name, offset, ty, sub_type, bit_fields, array_num,
+                          endian)
 
             # Validate it.
             self._check_field(field)
@@ -339,8 +342,11 @@ class Generator(object):
             err_msg = "Error reading field '%s' of structure: %%s" % (
                 field.name)
 
-            # TODO: fix me!
-            endian = 'binary.LittleEndian'
+            if field.endian == 'big':
+                endian = 'binary.BigEndian'
+            else:
+                endian = 'binary.LittleEndian'
+
             code.append('err = binary.Read(input, %s, &%s)' % (
                 endian, field_name
             ))
