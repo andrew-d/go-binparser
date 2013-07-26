@@ -68,6 +68,12 @@ import textwrap
 from collections import namedtuple
 
 
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+
 def set_bits(num):
     val = 0
     ctr = 1
@@ -416,14 +422,27 @@ def main():
               file=sys.stderr)
         return 1
 
-    d = json.load(open(sys.argv[1], 'rb'))
+    # Open the input file.
+    f = open(sys.argv[1], 'rb')
+
+    # Try loading as yaml if the support is there.
+    _, ext = os.path.splitext(sys.argv[1])
+    if yaml is not None and ext.lower() in ['.yaml', '.yml']:
+        d = yaml.load(f)
+    else:
+        d = json.load(f)
+
+    # Note: not using splitext, in case of multiple extensions.
     name, _ = os.path.basename(sys.argv[1]).split('.', 1)
+
+    # Generate code and print to stdout.
     parser = Parser()
     parser.add(d)
     gen = Generator(name)
     gen.add_from_parser(parser)
 
     print(gen.generate())
+
 
 if __name__ == "__main__":
     try:
