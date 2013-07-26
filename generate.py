@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
 The general purpose of this program is to take a structured representation of
-a data structure (pun not intended), and output code for a specific language to
-parse this data structure.  Currently, Google Go is the main language target.
+a data structure (pun not intended), and output Go code that will parse this
+structure into a similar in-memory structure.
 
 - A structure consists of a name, and some number of fields.  Optional
   attributes include: endianness (defaults to little-endian), ...
@@ -20,10 +20,10 @@ parse this data structure.  Currently, Google Go is the main language target.
   default to that of the parent structure.
 
 Note that this project is NOT designed to be a general-purpose binary parsing
-library, a la Python's Construct.  Since I plan on adding other language
-targets in the future, this library is designed to be the lowest common
-denominator of binary parsing - taking a single structure and its associated
-fields, and reading them into an in-memory representation in the host language.
+library, a la Python's Construct.  Since I might add other language targets in
+the future, this library is designed to be the lowest common denominator of
+binary parsing - taking a single structure and its associated fields, and
+reading them into an in-memory representation in the host language.
 
 Examples, in YAML format:
 
@@ -49,6 +49,9 @@ fields:
           - name: flag1         # Default: 1 bit
           - name: not_a_flag    # Override number of bits
             size: 2
+    - name: an_array
+      offset: 4
+      type: uint16[2]           # 2 uint16s, back-to-back
 """
 
 # TODO list (in order):
@@ -103,16 +106,6 @@ def test_validate_integral_type():
     assert validate_integral_type('uint32') == True
     assert validate_integral_type('uintptr') == True
     assert validate_integral_type('intptr') == False
-
-"""
-planning:
-    - parser will turn dictionary representation into list of Structs,
-      each of which will have some Fields
-    - each Field knows its own type, and whether or not it has sub-fields
-      or subtypes (e.g. bitfield, array), along with an offset and size.
-    - we then have a language-specific Generator class that will output
-      code to parse each individual Field.
-"""
 
 
 _ARRAY_RE = re.compile(r'(.*?)\[(\d)+\]')
