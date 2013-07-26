@@ -1,0 +1,7 @@
+[
+    {"name": "PaddingTest",
+     "fields": [
+        {"name": "first", "offset": 3, "type": "uint32"},
+        {"name": "second", "offset": 15, "type": "uint32"}
+    ]}
+]
