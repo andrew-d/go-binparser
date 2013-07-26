@@ -62,6 +62,7 @@ import os
 import re
 import sys
 import json
+import textwrap
 from collections import namedtuple
 
 
@@ -97,10 +98,21 @@ def validate_integral_type(name):
 def test_validate_integral_type():
     assert validate_integral_type('uint8') == True
     assert validate_integral_type('uint88') == False
+    assert validate_integral_type('uint') == False
     assert validate_integral_type('int16') == True
     assert validate_integral_type('uint32') == True
     assert validate_integral_type('uintptr') == True
     assert validate_integral_type('intptr') == False
+
+"""
+planning:
+    - parser will turn dictionary representation into list of Structs,
+      each of which will have some Fields
+    - each Field knows its own type, and whether or not it has sub-fields
+      or subtypes (e.g. bitfield, array), along with an offset and size.
+    - we then have a language-specific Generator class that will output
+      code to parse each individual Field.
+"""
 
 
 _ARRAY_RE = re.compile(r'(.*?)\[(\d)+\]')
@@ -120,11 +132,12 @@ SIZES = {
 Field = namedtuple('Field', [
     'name',
     'offset',
-    'type',
+    'ty',
     'sub_type',
     'bit_fields',
     'array_num',
 ])
+
 
 BitField = namedtuple('BitField', [
     'name',
@@ -132,18 +145,111 @@ BitField = namedtuple('BitField', [
 ])
 
 
-class Generator(object):
-    PRELUDE = [
-        'import (',
-        '\t"encoding/binary"',
-        '\t"errors"',
-        '\t"fmt"',
-        '\t"io"',
-        ')',
-    ]
+Struct = namedtuple('Struct', ['name', 'fields'])
 
-    def __init__(self, pkg_name):
+
+class Parser(object):
+    def __init__(self):
+        self.structs = []
+
+    def add(self, spec):
+        for struct in spec:
+            self.add_one(struct)
+
+    def add_one(self, struct):
+        s_name = struct['name']
+
+        # Collect each field's data, with certain defaults.
+        fields = []
+        for field in struct['fields']:
+            # Required
+            name       = field['name']
+            offset     = int(field['offset'])
+            ty         = field['type']
+            sub_type   = None
+            bit_fields = None
+            array_num  = None
+
+            # If the type is 'bitfield', we need the bit type and bit fields.
+            if ty.startswith('bitfield'):
+                ty, sub_type = ty.split('.', 1)
+
+                # Our subfields default to 1 bit in size.
+                bit_fields = [
+                    BitField(x['name'], x.get('size', 1))
+                        for x in field['bit_fields']
+                ]
+
+            # If the type matches the array datatype, we extract the number
+            # of elements, and properly set the sub-type.
+            match = _ARRAY_RE.match(ty)
+            if match is not None:
+                sub_type, array_num = match.groups()
+                array_num = int(array_num)
+                ty = 'array'
+
+            # Create our field.
+            field = Field(name, offset, ty, sub_type, bit_fields, array_num)
+
+            # Validate it.
+            self._check_field(field)
+            if field.ty == 'bitfield':
+                self._check_bitfield(s_name, field)
+
+            fields.append(field)
+
+        # Create the final struct.
+        s = Struct(s_name, fields)
+        self.structs.append(s)
+
+    def _check_field(self, field):
+        # Validate the name.
+        if field.ty in ['array', 'bitfield']:
+            check = field.sub_type
+        else:
+            check = field.ty
+
+        valid = validate_integral_type(check)
+        if not valid:
+            raise Exception('Invalid type given for field "%s": %s' % (
+                name, check))
+
+    def _check_bitfield(self, struct_name, field):
+        """
+        Check a single bitfield to ensure that it doesn't use more bits
+        than the size it was declared with.
+        """
+        # Bitfields can't be pointer-sized.
+        if field.sub_type == 'uintptr':
+            raise Exception('Bitfields can\'t be uintptr (field "%s" in "%s")'
+                            % (field.name, struct_name))
+
+        num_bits = sum(x.size for x in field.bit_fields)
+        max_bits = SIZES[field.sub_type] * 8
+        if num_bits > max_bits:
+            raise Exception(
+                'Too many bits in field "%s" of structure "%s" '
+                '- used: %d, max: %d' % (field.name, struct_name,
+                                         num_bits, max_bits))
+
+
+def _ds(s):
+    return textwrap.dedent(s).replace('\r', '').split('\n')
+
+
+class Generator(object):
+    PRELUDE = _ds("""
+        import (
+        \t"encoding/binary"
+        \t"errors"
+        \t"fmt"
+        \t"io"
+        )
+        """)
+
+    def __init__(self, pkg_name, add_binfield=True):
         self.pkg_name = pkg_name
+        self.add_binfield = add_binfield
         self.defs = []
 
     def generate(self):
@@ -157,90 +263,40 @@ class Generator(object):
 
         return '\n'.join(data)
 
-    def add(self, spec):
-        for struct in spec:
+    def add_from_parser(self, parser):
+        for struct in parser.structs:
             self.add_one(struct)
 
     def add_one(self, struct):
-        s_name = struct['name']
-        output_name = s_name[0].capitalize() + s_name[1:]
-
-        # Collect a tuple of each field's data, with certain defaults.
-        fields = []
-        for field in struct['fields']:
-            # Required
-            name       = field['name']
-            offset     = int(field['offset'])
-            type       = field['type']
-            sub_type   = None
-            bit_fields = None
-            array_num  = None
-
-            # If the type is 'bitfield', we need the bit type and bit fields.
-            if type.startswith('bitfield'):
-                type, sub_type = type.split('.', 1)
-
-                # Get all sub-fields.
-                bit_fields = [
-                    BitField(x['name'], x.get('size', 1))
-                        for x in field['bit_fields']
-                ]
-
-                # Check this bitfield for consistency.
-                num_bits = sum(x[1] for x in bit_fields)
-                max_bits = SIZES[sub_type] * 8
-                if num_bits > max_bits:
-                    raise Exception(
-                        'Too many bits in field "%s" of structure "%s" '
-                        '- used: %d, max: %d' % (name, s_name,
-                                                 num_bits, max_bits))
-
-            # If the type matches the array datatype, we extract the number
-            # of elements, and properly set the sub-type.
-            match = _ARRAY_RE.match(type)
-            if match is not None:
-                sub_type, array_num = match.groups()
-                array_num = int(array_num)
-                type = 'array'
-
-            # Validate the name.
-            if type in ['array', 'bitfield']:
-                check = sub_type
-            else:
-                check = type
-
-            valid = validate_integral_type(check)
-            if not valid:
-                raise Exception('Invalid type given for field "%s": %s' % (
-                    name, check))
-
-            fields.append(Field(name, offset, type, sub_type, bit_fields,
-                                array_num))
+        # Create the output name for the structure.
+        output_name = struct.name[0].capitalize() + struct.name[1:]
 
         # Create the structure definition in the order it's given (i.e. do it
         # before sorting).
         defn = [
             'type %s struct {' % (output_name,)
         ]
-        for field in fields:
+        for field in struct.fields:
             # Depending on the type...
-            if field.type == 'bitfield':
+            if field.ty == 'bitfield':
                 for sub in field.bit_fields:
-                    defn.append('\t%s %s' % (sub.name.title(), field.sub_type))
+                    defn.append('\t%s %s' % (self.output_field_name(sub),
+                                             field.sub_type))
 
-            elif field.type == 'array':
-                defn.append('\t%s [%d]%s' % (field.name.title(),
+            elif field.ty == 'array':
+                defn.append('\t%s [%d]%s' % (self.output_field_name(field),
                                              field.array_num,
                                              field.sub_type))
 
             else:
                 # Add the field.
-                defn.append('\t%s %s' % (field.name.title(), field.type))
+                defn.append('\t%s %s' % (self.output_field_name(field),
+                                         field.ty))
 
         defn.append('}')
 
         # Sort the array by the offset in the structure.
-        fields.sort(key=lambda f: f[1])
+        s_fields = sorted(struct.fields, key=lambda f: f[1])
 
         # Our general algorithm is as follows:
         # Given the array of fields, sorted by the offset in the structure,
@@ -267,7 +323,7 @@ class Generator(object):
         last_name = '*beginning of structure*'
         last_end = 0
 
-        for field in fields:
+        for field in s_fields:
             diff = field.offset - last_end
             if diff != 0:
                 tmp = get_temp()
@@ -281,11 +337,11 @@ class Generator(object):
             code.append('// Reading into field "%s"' % (field.name,))
 
             # If not a bitfield...
-            if field.type == 'bitfield':
+            if field.ty == 'bitfield':
                 field_name = get_temp()
                 code.append('var %s %s' % (field_name, field.sub_type))
             else:
-                field_name = 'output.' + field.name.title()
+                field_name = 'output.' + self.output_field_name(field)
 
             err_msg = "Error reading field '%s' of structure: %%s" % (
                 field.name)
@@ -301,7 +357,7 @@ class Generator(object):
             code.append('}')
             code.append('')
 
-            if field.type == 'bitfield':
+            if field.ty == 'bitfield':
                 # We need to unpack from the temporary name to the real one.
                 size = SIZES[field.sub_type]
 
@@ -317,7 +373,7 @@ class Generator(object):
                     ))
 
                     code.append('output.%s = (%s & 0x%X) >> %d' % (
-                        sub.name.title(),
+                        self.output_field_name(sub),
                         field_name,
                         curr_mask,
                         offset,
@@ -328,12 +384,12 @@ class Generator(object):
                 code.append('')
                 last_end = field.offset + size
 
-            elif field.type == 'array':
+            elif field.ty == 'array':
                 last_end = (field.offset +
                             SIZES[field.sub_type] * field.array_num)
 
             else:
-                last_end = field.offset + SIZES[field.type]
+                last_end = field.offset + SIZES[field.ty]
 
             last_name = field.name
 
@@ -351,7 +407,8 @@ class Generator(object):
         self.defs.extend('\t' + x for x in code)
         self.defs.append('}')
 
-
+    def output_field_name(self, field):
+        return field.name.title()
 
 
 def main():
@@ -362,8 +419,10 @@ def main():
 
     d = json.load(open(sys.argv[1], 'rb'))
     name, _ = os.path.basename(sys.argv[1]).split('.', 1)
+    parser = Parser()
+    parser.add(d)
     gen = Generator(name)
-    gen.add(d)
+    gen.add_from_parser(parser)
 
     print(gen.generate())
 

@@ -1,9 +1,9 @@
 [
     {"name": "UintTest",
      "fields": [
-        {"name": "uint8", "offset": 0, "type": "uint8"},
-        {"name": "uint16", "offset": 1, "type": "uint16"},
-        {"name": "uint32", "offset": 3, "type": "uint32"},
-        {"name": "uint64", "offset": 7, "type": "uint64"}
+        {"name": "f_uint8", "offset": 0, "type": "uint8"},
+        {"name": "f_uint16", "offset": 1, "type": "uint16"},
+        {"name": "f_uint32", "offset": 3, "type": "uint32"},
+        {"name": "f_uint64", "offset": 7, "type": "uint64"}
     ]}
 ]

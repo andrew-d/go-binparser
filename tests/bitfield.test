@@ -1,0 +1,10 @@
+[
+    {"name": "FooStruct",
+     "fields": [
+        {"name": "bits", "offset": 0, "type": "bitfield.uint8", "bit_fields": [
+            {"name": "flag1"},
+            {"name": "not_a_flag", "size": 2},
+            {"name": "remaining", "size": 5}
+        ]}
+     ]}
+]

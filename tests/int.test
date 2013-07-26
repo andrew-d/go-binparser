@@ -1,0 +1,9 @@
+[
+    {"name": "IntTest",
+     "fields": [
+        {"name": "f_int8", "offset": 0, "type": "int8"},
+        {"name": "f_int16", "offset": 1, "type": "int16"},
+        {"name": "f_int32", "offset": 3, "type": "int32"},
+        {"name": "f_int64", "offset": 7, "type": "int64"}
+    ]}
+]
